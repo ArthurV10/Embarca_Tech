@@ -1,8 +1,8 @@
 {
     "recommendations": [
+        "raspberry-pi.raspberry-pi-pico",
         "ms-vscode.vscode-serial-monitor",
         "marus25.cortex-debug",
-        "raspberry-pi.raspberry-pi-pico",
         "ms-vscode.cpptools-extension-pack",
         "ms-vscode.cpptools"
     ]

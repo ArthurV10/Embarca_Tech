@@ -12,6 +12,34 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.1.0)
+set(toolchainVersion 13_3_Rel1)
+set(picotoolVersion 2.1.0)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.1.0)
+set(toolchainVersion 13_3_Rel1)
+set(picotoolVersion 2.1.0)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -48,7 +76,7 @@ pico_sdk_init()
 add_executable(Teste Teste.c)
 
 # Incluir a biblioteca ws2812b
-add_subdirectory(libs/ws2812b)
+add_subdirectory(libs/RP2040-WS2812B-Animation)
 
 pico_set_program_name(Teste "Teste")
 pico_set_program_version(Teste "0.1")
@@ -65,18 +93,18 @@ target_link_libraries(Teste
 )
 
 # Gerar o header PIO para ws2812
-pico_generate_pio_header(Teste ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/ws2812.pio)
+pico_generate_pio_header(Teste ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/ws2812.pio)
 
 # Adicionar os arquivos fontes do projeto
 target_sources(Teste PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/ws2812b_animation.c
+    ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/ws2812b_animation.c
 )
 
 # Incluir diretórios necessários
 target_include_directories(Teste PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc
-    ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc/CP0-EU
-    ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc/utf8-iterator/source
+    ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc
+    ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc/CP0-EU
+    ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc/utf8-iterator/source
 )
 
 # Gerar saídas extras para o projeto
@@ -89,14 +117,14 @@ if (NOT TARGET ${TARGET_NAME})
     add_library(${TARGET_NAME} INTERFACE)
 
     target_sources(${TARGET_NAME} INTERFACE
-        ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/ws2812b_animation.c
-        ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc/utf8-iterator/source/utf-8.c
+        ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/ws2812b_animation.c
+        ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc/utf8-iterator/source/utf-8.c
     )
 
     target_include_directories(${TARGET_NAME} INTERFACE
-        ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc
-        ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc/CP0-EU
-        ${CMAKE_CURRENT_LIST_DIR}/libs/ws2812b/inc/utf8-iterator/source
+        ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc
+        ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc/CP0-EU
+        ${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation/inc/utf8-iterator/source
     )
 
     target_link_libraries(${TARGET_NAME} INTERFACE
