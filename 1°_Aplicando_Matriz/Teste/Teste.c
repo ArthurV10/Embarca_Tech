@@ -1,8 +1,8 @@
-#include <stdio.h>
+  #include <stdio.h>
 #include <stdlib.h>  // Necessário para a função rand()
 #include "pico/stdlib.h"
-#include "utils_placa.c"
 #include "ws2812b_animation.h"
+#include "utils_placa.c"
 
 // Máscara original do círculo 5x5
 static uint8_t MASK_CIRCLE_5X5[] = {
@@ -14,7 +14,7 @@ static uint8_t MASK_CIRCLE_5X5[] = {
 };
 
 int main() {
-    ws2812b_set_global_dimming(5);
+    ws2812b_set_global_dimming(7);
     // Inicializa a comunicação serial
     stdio_init_all();
 
@@ -38,15 +38,14 @@ int main() {
             }
         }
 
-        // Renderizar a máscara com as cores aplicadas
+        // Preencher todos os LEDs com cores diferentes
+        ws2812b_fill_all(ws2812b_random_color(100.0));
+        
+        // Renderizar a matriz completa com as cores aplicadas
         ws2812b_render();
 
         // Pausar por 1 segundo para visualização
-        sleep_ms(1000);
-
-        ws2812b_fill_all(ws2812b_random_color(100.0));
-
-        sleep_ms(500);
+        sleep_ms(200);
 
         // Limpar todos os LEDs (desliga todos)
         ws2812b_render();
