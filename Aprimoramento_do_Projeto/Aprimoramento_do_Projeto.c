@@ -9,6 +9,14 @@
 #include "hardware/pwm.h" // Biblioteca para controle de PWM
 #include "ws2812b_animation.h" // Biblioteca para controle de LEDs WS2812B
 #include "hardware/gpio.h" // Biblioteca para controle de GPIOs
+#include "pico/cyw43_arch.h"
+#include "lwip/tcp.h"
+#include "lwip/dhcp.h"
+#include "lwip/timeouts.h"
+
+#define WIFI_SSID "Cabecita"
+#define WIFI_PASSWORD "Claritazita1"
+#define SERVER_PORT 8080
 
 // Definições para o display
 #define SCREEN_WIDTH 128 // Largura do display OLED
@@ -300,10 +308,73 @@ bool menu_selection(){
     }
 }
 
+// Função de callback para receber dados TCP
+err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+    if (p != NULL) {
+        // Copiar os dados para um buffer legível
+        char buffer[256];
+        memset(buffer, 0, sizeof(buffer));
+        strncpy(buffer, (char*)p->payload, p->len);
+        buffer[p->len] = '\0'; // Garantir terminação nula
+
+        printf("Recebido: %s\n", buffer);
+       
+        // Liberar buffer
+        pbuf_free(p);
+    } else {
+        // Se p for NULL, a conexão foi fechada
+        tcp_close(tpcb);
+    }
+    return ERR_OK;
+}
+
+// Função de callback para gerenciar nova conexão
+err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
+    // Definir a função de recebimento para esta nova conexão
+    tcp_recv(newpcb, tcp_recv_callback);
+    return ERR_OK;
+}
+
+// Função para iniciar o servidor TCP
+void tcp_server(void) {
+    struct tcp_pcb *pcb;
+    err_t err;
+
+    printf("Iniciando servidor TCP...\n");
+
+    // Criar um novo PCB (control block) para o servidor TCP
+    pcb = tcp_new();
+    if (pcb == NULL) {
+        printf("Erro ao criar o PCB TCP.\n");
+        return;
+    }
+
+    // Vincular o servidor ao endereço e porta desejada
+    ip_addr_t ipaddr;
+    IP4_ADDR(&ipaddr, 0, 0, 0, 0);  // Ou use IP_ADDR_ANY para todas as interfaces
+    err = tcp_bind(pcb, &ipaddr, SERVER_PORT);
+    if (err != ERR_OK) {
+        printf("Erro ao vincular ao endereço e porta.\n");
+        return;
+    }
+
+    // Colocar o servidor para ouvir conexões
+    pcb = tcp_listen(pcb);
+    if (pcb == NULL) {
+        printf("Erro ao colocar o servidor em escuta.\n");
+        return;
+    }
+
+    // Configurar a função de aceitação das conexões
+    tcp_accept(pcb, tcp_accept_callback);
+    printf("Servidor TCP iniciado na porta %d.\n", SERVER_PORT);
+}
+
 int main() {
-    ws2812b_set_global_dimming(7);
+    ssd1306_clear(&display);
     // Inicializa UART para depuração
     stdio_init_all();
+    ws2812b_set_global_dimming(7);
     gpio_init(DHT_PIN);
     gpio_init(BLUE_LED_PIN);
     gpio_set_dir(BLUE_LED_PIN, GPIO_OUT);
@@ -328,6 +399,27 @@ int main() {
     // Inicializa a matriz de LEDs WS2812B
     ws2812b_init(pio0, LED_PIN, NUM_LEDS);
 
+    cyw43_arch_init();
+    cyw43_arch_enable_sta_mode();
+
+    char bufferWifi[50];
+
+    if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+        demotxt("Falha ao conectar ao WiFi.\n");
+        sleep_ms(500);
+    } else {
+        sprintf(bufferWifi, "Conectado ao WiFi %s.\n", WIFI_SSID);
+        demotxt(bufferWifi);
+        sleep_ms(500);
+        uint8_t *ip_address = (uint8_t *)&(cyw43_state.netif[0].ip_addr.addr);
+        sprintf(bufferWifi, "IP address: %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+        demotxt(bufferWifi);
+        sleep_ms(500);
+    }
+
+    // Inicia o servidor TCP
+    tcp_server();
+
     // Configura os buzzers
     gpio_set_function(BUZZER_A_PIN, GPIO_FUNC_PWM);
     slice_num_a = pwm_gpio_to_slice_num(BUZZER_A_PIN);
@@ -349,6 +441,7 @@ int main() {
 
     // Loop principal
     int phase = 0;
+
     while (true) {
         
         // Ajusta a calibragem com base nos botões
@@ -402,7 +495,7 @@ int main() {
         set_leds_and_buzzers(gas_level);
 
         phase += 2;
-
+        tight_loop_contents();
         // Pequeno atraso para evitar sobrecarga
         sleep_ms(50);
     }
