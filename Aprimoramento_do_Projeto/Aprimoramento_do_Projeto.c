@@ -14,8 +14,8 @@
 #include "lwip/dhcp.h"
 #include "lwip/timeouts.h"
 
-#define WIFI_SSID "Cabecita"
-#define WIFI_PASSWORD "Claritazita1"
+#define WIFI_SSID "DEUSELIA MELO 2.4"
+#define WIFI_PASSWORD "15241524"
 #define SERVER_PORT 8080
 
 // Definições para o display
@@ -405,16 +405,41 @@ int main() {
     char bufferWifi[50];
 
     if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-        demotxt("Falha ao conectar ao WiFi.\n");
-        sleep_ms(500);
+        ssd1306_clear(&display);
+        int x_centered = (SCREEN_WIDTH - (strlen("Falha ao conectar") * 6)) / 2;
+        ssd1306_draw_string(&display, x_centered, 16, 1, "Falha ao conectar");
+    
+        x_centered = (SCREEN_WIDTH - (strlen("ao WiFi.") * 6)) / 2;
+        ssd1306_draw_string(&display, x_centered, 24, 1, "ao WiFi.");
+    
+        ssd1306_show(&display);
+        sleep_ms(3000);
     } else {
-        sprintf(bufferWifi, "Conectado ao WiFi %s.\n", WIFI_SSID);
-        demotxt(bufferWifi);
-        sleep_ms(500);
+        ssd1306_clear(&display);
+        // Centralizar "Conectado ao WiFi"
+        int x_centered = (SCREEN_WIDTH - (strlen("Conectado ao WiFi") * 6)) / 2;
+        ssd1306_draw_string(&display, x_centered, 16, 1, "Conectado ao WiFi");
+    
+        // Centralizar o nome da rede WiFi
+        x_centered = (SCREEN_WIDTH - (strlen(WIFI_SSID) * 6)) / 2;
+        ssd1306_draw_string(&display, x_centered, 24, 1, WIFI_SSID);
+    
+        // Obter e formatar o endereço IP
         uint8_t *ip_address = (uint8_t *)&(cyw43_state.netif[0].ip_addr.addr);
-        sprintf(bufferWifi, "IP address: %d.%d.%d.%d\n", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
-        demotxt(bufferWifi);
-        sleep_ms(500);
+        sprintf(bufferWifi, "IP address:");
+    
+        // Centralizar "IP address:"
+        x_centered = (SCREEN_WIDTH - (strlen(bufferWifi) * 6)) / 2;
+        ssd1306_draw_string(&display, x_centered, 40, 1, bufferWifi);
+    
+        sprintf(bufferWifi, "%d.%d.%d.%d", ip_address[0], ip_address[1], ip_address[2], ip_address[3]);
+    
+        // Centralizar o endereço IP
+        x_centered = (SCREEN_WIDTH - (strlen(bufferWifi) * 6)) / 2;
+        ssd1306_draw_string(&display, x_centered, 48, 1, bufferWifi);
+    
+        ssd1306_show(&display);
+        sleep_ms(5000);
     }
 
     // Inicia o servidor TCP
