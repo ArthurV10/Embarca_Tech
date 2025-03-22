@@ -13,10 +13,11 @@
 #include "lwip/tcp.h"
 #include "lwip/dhcp.h"
 #include "lwip/timeouts.h"
+#include "lwip/apps/http_client.h"
 
 #define WIFI_SSID "DEUSELIA MELO 2.4"
 #define WIFI_PASSWORD "15241524"
-#define SERVER_PORT 8080
+#define SERVER_PORT 5000
 
 // Definições para o display
 #define SCREEN_WIDTH 128 // Largura do display OLED
@@ -370,6 +371,58 @@ void tcp_server(void) {
     printf("Servidor TCP iniciado na porta %d.\n", SERVER_PORT);
 }
 
+void send_gas_level(uint16_t gas_level) {
+    struct tcp_pcb *pcb;
+    ip_addr_t server_ip;
+    err_t err;
+
+    // IP do servidor Flask (substitua pelo endereço do servidor real)
+    IP4_ADDR(&server_ip, 192, 168, 3, 105); // Exemplo: 192.168.1.100
+
+    // Porta do servidor Flask
+    uint16_t server_port = 5000;
+
+    // Cria um PCB TCP
+    pcb = tcp_new();
+    if (pcb == NULL) {
+        printf("Erro ao criar o PCB TCP\n");
+        return;
+    }
+
+    // Conecta ao servidor Flask
+    err = tcp_connect(pcb, &server_ip, server_port, NULL);
+    if (err != ERR_OK) {
+        printf("Erro ao conectar ao servidor: %d\n", err);
+        tcp_close(pcb);
+        return;
+    }
+
+    // Cria o JSON com o nível de gás
+    char json_data[64];
+    sprintf(json_data, "{\"gas_level\": %d}", gas_level);
+    size_t data_length = strlen(json_data);
+
+    // Envia os dados ao servidor Flask
+    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, data_length, PBUF_RAM);
+    if (p == NULL) {
+        printf("Erro ao alocar o buffer de envio\n");
+        tcp_close(pcb);
+        return;
+    }
+
+    memcpy(p->payload, json_data, data_length);
+    err = tcp_write(pcb, p->payload, data_length, TCP_WRITE_FLAG_COPY);
+    if (err != ERR_OK) {
+        printf("Erro ao enviar os dados: %d\n", err);
+    } else {
+        printf("JSON enviado: %s\n", json_data);
+    }
+
+    // Libera os recursos
+    pbuf_free(p);
+    tcp_close(pcb);
+}
+
 int main() {
     ssd1306_clear(&display);
     // Inicializa UART para depuração
@@ -482,10 +535,6 @@ int main() {
         uint16_t gas_percentage = (gas_level / 4095.0) * 100;
         ssd1306_clear(&display);
 
-        // Atualiza display OLED
-        draw_wave(5, 1 + (gas_level / 500), phase, 0, 10); // Onda superior
-        draw_wave(5, 1 + (gas_level / 500), phase, 0, 54); // Onda inferior
-
         char buffer[32];
         sprintf(buffer, "Nivel de Gas: %d%%", gas_percentage);
         int16_t text_width = strlen(buffer) * 6;
@@ -520,9 +569,10 @@ int main() {
         set_leds_and_buzzers(gas_level);
 
         phase += 2;
-        tight_loop_contents();
         // Pequeno atraso para evitar sobrecarga
-        sleep_ms(50);
+        sleep_ms(20);
+
+        send_gas_level(gas_level);
     }
 
     return 0;
