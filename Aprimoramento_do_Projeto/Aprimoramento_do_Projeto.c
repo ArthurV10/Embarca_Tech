@@ -36,10 +36,6 @@
  #define LED_PIN 7 // Pino dos LEDs WS2812B
  #define DHT_PIN 8 // Pino do Sensor DHT11/DHT22
  
- // Definições para debounce
- #define DEBOUNCE_DELAY_MS 100 //Atraso de debounce em milissegundos
- #define INPUT_COOLDOWN_MS 200 // Tempo de espera mínimo entre entradas
- 
  #define LEVEL_LOW 500 // Nível baixo de gás
  #define LEVEL_LOW_HIGH 1000 // Nível intermediário baixo de gás
  #define LEVEL_MEDIUM_LOW 1500 // Nível médio baixo de gás
@@ -50,102 +46,105 @@
  uint slice_num_b; // Numero da slice PWM para o buzzer B
  float calibration_factor = 1.0; // Fator de calibração do sensor de gás
  ssd1306_t display; // Variável para o display SSD1306
- bool is_calibration_manual = true; // Flag para indicar se a calibração é manual
  
  // Função para exibir texto no display
- void demotxt(const char *texto) {
-     ssd1306_clear(&display);
-     ssd1306_draw_string(&display, 0, 0, 1, texto);
-     ssd1306_show(&display);
-     sleep_ms(1000);
- }
- 
- void dht11_read(int *temperature, int *humidity) {
-     uint8_t bits[5] = {0};
-     uint32_t start_time;
- 
-     // Configura o pino do DHT como saída e envia pulso de inicialização
-     gpio_set_dir(DHT_PIN, GPIO_OUT);
-     gpio_put(DHT_PIN, 0);
-     sleep_ms(18);
-     gpio_put(DHT_PIN, 1);
-     sleep_us(40);
-     gpio_set_dir(DHT_PIN, GPIO_IN);
- 
-     // Aguarda a resposta do sensor com timeout
-     start_time = to_ms_since_boot(get_absolute_time());
-     while (gpio_get(DHT_PIN) == 1) {
-         if (to_ms_since_boot(get_absolute_time()) - start_time > 100) {
-             printf("Erro: Timeout esperando resposta do DHT11\n");
-             *temperature = -1;
-             *humidity = -1;
-             return;
-         }
-     }
- 
-     start_time = to_ms_since_boot(get_absolute_time());
-     while (gpio_get(DHT_PIN) == 0) {
-         if (to_ms_since_boot(get_absolute_time()) - start_time > 100) {
-             printf("Erro: Timeout esperando pulso baixo\n");
-             *temperature = -1;
-             *humidity = -1;
-             return;
-         }
-     }
- 
-     start_time = to_ms_since_boot(get_absolute_time());
-     while (gpio_get(DHT_PIN) == 1) {
-         if (to_ms_since_boot(get_absolute_time()) - start_time > 100) {
-             printf("Erro: Timeout esperando pulso alto\n");
-             *temperature = -1;
-             *humidity = -1;
-             return;
-         }
-     }
- 
-     // Leitura dos 40 bits de dados
-     for (int i = 0; i < 40; i++) {
-         // Aguarda início do bit
-         start_time = to_ms_since_boot(get_absolute_time());
-         while (gpio_get(DHT_PIN) == 0) {
-             if (to_ms_since_boot(get_absolute_time()) - start_time > 100) {
-                 printf("Erro: Timeout esperando bit %d\n", i);
-                 *temperature = -1;
-                 *humidity = -1;
-                 return;
-             }
-         }
- 
-         // Aguarda tempo necessário e lê o bit
-         sleep_us(30); // 26-28us para 0, 70us para 1
-         if (gpio_get(DHT_PIN) == 1) {
-             bits[i / 8] |= (1 << (7 - (i % 8)));
-         }
- 
-         // Aguarda final do bit
-         start_time = to_ms_since_boot(get_absolute_time());
-         while (gpio_get(DHT_PIN) == 1) {
-             if (to_ms_since_boot(get_absolute_time()) - start_time > 100) {
-                 printf("Erro: Timeout no pulso baixo do bit %d\n", i);
-                 *temperature = -1;
-                 *humidity = -1;
-                 return;
-             }
-         }
-     }
- 
-     // Verifica checksum
-     if ((bits[0] + bits[1] + bits[2] + bits[3]) == bits[4]) {
-         *humidity = bits[0];
-         *temperature = bits[2];
-     } else {
-         printf("Erro: Checksum inválido\n");
-         *humidity = -1;
-         *temperature = -1;
-     }
- }
+void demotxt(const char *texto) {
+    ssd1306_clear(&display); // Limpa o display
+    ssd1306_draw_string(&display, 0, 0, 1, texto); // Desenha a string no display
+    ssd1306_show(&display); // Atualiza o display para mostrar o conteúdo
+    sleep_ms(1000); // Aguarda 1 segundo
+}
+
+// Função para leitura do sensor DHT11
+void dht11_read(int *temperature, int *humidity) {
+    uint8_t bits[5] = {0}; // Array para armazenar os dados do sensor
+    uint32_t start_time; // Variável para armazenar o tempo inicial
+
+    // Configura o pino do DHT como saída e envia pulso de inicialização
+    gpio_set_dir(DHT_PIN, GPIO_OUT); // Define o pino como saída
+    gpio_put(DHT_PIN, 0); // Define o pino como LOW
+    sleep_ms(18); // Aguarda pelo tempo necessário para inicialização
+    gpio_put(DHT_PIN, 1); // Define o pino como HIGH
+    sleep_us(40); // Aguarda por 40 microsegundos
+    gpio_set_dir(DHT_PIN, GPIO_IN); // Define o pino como entrada
+
+    // Aguarda a resposta do sensor com timeout
+    start_time = to_ms_since_boot(get_absolute_time()); // Marca o início do tempo
+    while (gpio_get(DHT_PIN) == 1) { // Aguarda resposta do sensor
+        if (to_ms_since_boot(get_absolute_time()) - start_time > 100) { // Timeout
+            printf("Erro: Timeout esperando resposta do DHT11\n");
+            *temperature = -1; // Define temperatura como erro
+            *humidity = -1; // Define umidade como erro
+            return;
+        }
+    }
+
+    // Aguarda pulso baixo do sensor
+    start_time = to_ms_since_boot(get_absolute_time()); 
+    while (gpio_get(DHT_PIN) == 0) { 
+        if (to_ms_since_boot(get_absolute_time()) - start_time > 100) { // Timeout
+            printf("Erro: Timeout esperando pulso baixo\n");
+            *temperature = -1;
+            *humidity = -1;
+            return;
+        }
+    }
+
+    // Aguarda pulso alto do sensor
+    start_time = to_ms_since_boot(get_absolute_time()); 
+    while (gpio_get(DHT_PIN) == 1) { 
+        if (to_ms_since_boot(get_absolute_time()) - start_time > 100) { // Timeout
+            printf("Erro: Timeout esperando pulso alto\n");
+            *temperature = -1;
+            *humidity = -1;
+            return;
+        }
+    }
+
+    // Leitura dos 40 bits de dados
+    for (int i = 0; i < 40; i++) {
+        // Aguarda início do bit
+        start_time = to_ms_since_boot(get_absolute_time()); 
+        while (gpio_get(DHT_PIN) == 0) { 
+            if (to_ms_since_boot(get_absolute_time()) - start_time > 100) { // Timeout
+                printf("Erro: Timeout esperando bit %d\n", i);
+                *temperature = -1;
+                *humidity = -1;
+                return;
+            }
+        }
+
+        // Aguarda tempo necessário e lê o bit
+        sleep_us(30); // Aguarda 30 microsegundos
+        if (gpio_get(DHT_PIN) == 1) { // Se ainda estiver alto, define o bit como 1
+            bits[i / 8] |= (1 << (7 - (i % 8))); 
+        }
+
+        // Aguarda final do bit
+        start_time = to_ms_since_boot(get_absolute_time()); 
+        while (gpio_get(DHT_PIN) == 1) { 
+            if (to_ms_since_boot(get_absolute_time()) - start_time > 100) { // Timeout
+                printf("Erro: Timeout no pulso baixo do bit %d\n", i);
+                *temperature = -1;
+                *humidity = -1;
+                return;
+            }
+        }
+    }
+
+    // Verifica checksum
+    if ((bits[0] + bits[1] + bits[2] + bits[3]) == bits[4]) { // Se checksum é válido
+        *humidity = bits[0]; // Define umidade
+        *temperature = bits[2]; // Define temperatura
+    } else { // Caso contrário, retorna erro
+        printf("Erro: Checksum inválido\n");
+        *humidity = -1;
+        *temperature = -1;
+    }
+}
  
  void buzzer_init() {
+    //Inicialização do buzzer
     gpio_set_function(BUZZER_A_PIN, GPIO_FUNC_PWM);
     slice_num_a = pwm_gpio_to_slice_num(BUZZER_A_PIN);
     pwm_set_wrap(slice_num_a, 25000);
@@ -196,18 +195,11 @@
  
  // Função para desenhar uma onda no display
  void draw_wave(int amplitude, int frequency, int phase, int offset, int y) {
+    // Desenha ondas senoidais para embelezar o display
      for (int x = 0; x < SCREEN_WIDTH; x++) {
          int wave_y = y + amplitude * sin((2 * M_PI * frequency * (x + phase)) / SCREEN_WIDTH);
          ssd1306_draw_pixel(&display, x, wave_y + offset);
      }
- }
- 
- void display_menu(int selected_option){
-     ssd1306_clear(&display);
-     ssd1306_draw_string(&display, 0, 0, 1, "Calibrar Automaticamente?");
-     ssd1306_draw_string(&display, 0, 16, 1, (selected_option == 0) ? ">Sim" : " Sim");
-     ssd1306_draw_string(&display, 0, 32, 1, (selected_option == 1) ? ">Nao" : " Nao");
-     ssd1306_show(&display);
  }
 
  typedef struct {
@@ -219,52 +211,60 @@
     ip_addr_t remote_addr;
 } HTTP_CLIENT_T;
 
- static err_t tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
-    HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)arg;
-    if (!p) {
-        state->complete = true;
-        return ERR_OK;
+// Função chamada quando há dados recebidos no cliente TCP
+static err_t tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+    HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)arg; // Converte o argumento para o tipo HTTP_CLIENT_T
+    if (!p) { // Verifica se a estrutura `pbuf` é nula (conexão finalizada)
+        state->complete = true; // Marca a requisição como completa
+        return ERR_OK; // Retorna com sucesso
     }
     
-    if (p->tot_len > 0) {
-        size_t to_copy = (p->tot_len < sizeof(state->response) - state->response_len - 1) ? p->tot_len : sizeof(state->response) - state->response_len - 1;
+    if (p->tot_len > 0) { // Verifica se há dados recebidos
+        // Determina o número de bytes a copiar, respeitando o limite do buffer
+        size_t to_copy = (p->tot_len < sizeof(state->response) - state->response_len - 1) 
+        ? p->tot_len : sizeof(state->response) - state->response_len - 1;
+        // Copia os dados da `pbuf` para o buffer de resposta
         pbuf_copy_partial(p, state->response + state->response_len, to_copy, 0);
-        state->response_len += to_copy;
-        state->response[state->response_len] = '\0';
+        state->response_len += to_copy; // Atualiza o tamanho da resposta
+        state->response[state->response_len] = '\0'; // Finaliza a string com null terminator
     }
     
-    tcp_recved(tpcb, p->tot_len);
-    pbuf_free(p);
-    return ERR_OK;
+    tcp_recved(tpcb, p->tot_len); // Indica ao TCP que os dados foram recebidos
+    pbuf_free(p); // Libera a `pbuf` após o processamento
+    return ERR_OK; // Retorna com sucesso
 }
 
+// Função chamada quando a conexão TCP é estabelecida
 static err_t tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
-    if (err != ERR_OK) {
+    if (err != ERR_OK) { // Verifica se houve erro na conexão
         printf("Erro ao conectar: %d\n", err);
-        return err;
+        return err; // Retorna o erro
     }
 
-    HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)arg;
+    HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)arg; // Converte o argumento para o tipo HTTP_CLIENT_T
+    // Envia a requisição HTTP para o servidor
     err = tcp_write(tpcb, state->request, strlen(state->request), TCP_WRITE_FLAG_COPY);
-    if (err != ERR_OK) {
+    if (err != ERR_OK) { // Verifica se houve erro ao enviar a requisição
         printf("Erro ao enviar requisição: %d\n", err);
-        return err;
+        return err; // Retorna o erro
     }
     
-    err = tcp_output(tpcb);
-    return err;
+    err = tcp_output(tpcb); // Força o envio dos dados através do socket TCP
+    return err; // Retorna o status da operação
 }
 
- bool send_gas_level(int gas_level) {
-    HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)calloc(1, sizeof(HTTP_CLIENT_T));
-    if (!state) {
+// Função para enviar o nível de gás para um servidor através de API HTTP
+bool send_gas_level(int gas_level) {
+    HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)calloc(1, sizeof(HTTP_CLIENT_T)); // Aloca memória para o estado do cliente HTTP
+    if (!state) { // Verifica se a memória foi alocada com sucesso
         printf("Erro ao alocar memória\n");
-        return false;
+        return false; // Retorna falha
     }
 
-    char json_data[128];
-    snprintf(json_data, sizeof(json_data), "{\"gas_level\": %d}", gas_level);
+    char json_data[128]; // Buffer para armazenar os dados JSON
+    snprintf(json_data, sizeof(json_data), "{\"gas_level\": %d}", gas_level); // Formata os dados JSON com o nível de gás
 
+    // Monta a requisição HTTP
     snprintf(state->request, sizeof(state->request),
              "POST %s HTTP/1.1\r\n"
              "Host: %s\r\n"
@@ -275,35 +275,37 @@ static err_t tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
              "%s",
              API_PATH, API_HOST, (int)strlen(json_data), json_data);
 
-    printf("Enviando JSON para API...\n%s\n", state->request);
+    printf("Enviando JSON para API...\n%s\n", state->request); // Exibe a requisição montada
 
+    // Converte o endereço IP do host para binário
     if (!ipaddr_aton(API_HOST, &state->remote_addr)) {
         printf("Erro ao resolver IP\n");
-        free(state);
-        return false;
+        free(state); // Libera a memória alocada
+        return false; // Retorna falha
     }
 
-    state->pcb = tcp_new();
-    if (!state->pcb) {
+    state->pcb = tcp_new(); // Cria uma nova estrutura de controle de TCP
+    if (!state->pcb) { // Verifica se a estrutura foi criada com sucesso
         printf("Erro ao criar PCB TCP\n");
-        free(state);
-        return false;
+        free(state); // Libera a memória alocada
+        return false; // Retorna falha
     }
 
-    tcp_arg(state->pcb, state);
-    tcp_recv(state->pcb, tcp_client_recv);
+    tcp_arg(state->pcb, state); // Define o estado como argumento para callbacks TCP
+    tcp_recv(state->pcb, tcp_client_recv); // Registra a função de callback para dados recebidos
 
+    // Tenta conectar ao servidor remoto na porta especificada
     err_t err = tcp_connect(state->pcb, &state->remote_addr, API_PORT, tcp_client_connected);
-    if (err != ERR_OK) {
+    if (err != ERR_OK) { // Verifica se houve erro na conexão
         printf("Erro ao conectar ao servidor: %d\n", err);
-        free(state);
-        return false;
+        free(state); // Libera a memória alocada
+        return false; // Retorna falha
     }
 
-    sleep_ms(5000);
-    printf("Resposta da API: %s\n", state->response);
-    free(state);
-    return true;
+    sleep_ms(5000); // Aguarda para processar a resposta da API
+    printf("Resposta da API: %s\n", state->response); // Exibe a resposta recebida
+    free(state); // Libera a memória alocada
+    return true; // Retorna sucesso
 }
  
  // Função de callback para receber dados TCP
@@ -371,7 +373,7 @@ static err_t tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
  void init_system() {
     // Inicializa UART para depuração
     stdio_init_all();
-    ws2812b_set_global_dimming(7);
+    ws2812b_set_global_dimming(3);
     gpio_init(DHT_PIN);
     buzzer_init();
 
