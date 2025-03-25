@@ -15,10 +15,10 @@
 #include "lwip/timeouts.h"
 #include "lwip/dns.h"
 
- #define WIFI_SSID "DEUSELIA MELO 2.4"
- #define WIFI_PASSWORD "15241524"
- #define API_HOST "server-embarca-tech.onrender.com"
- #define API_PORT 10000
+ #define WIFI_SSID "Cabecita"
+ #define WIFI_PASSWORD "Claritazita1"
+ #define API_HOST "metro.proxy.rlwy.net"
+ #define API_PORT 39421
  #define API_PATH "/notify_gas_level"
  
  // Definições para o display
@@ -189,8 +189,8 @@ void dht11_read(int *temperature, int *humidity) {
          // Vermelho em todas as fileiras e buzzers ligados
          ws2812b_fill_all(GRB_BLACK);
          ws2812b_fill_all(GRB_RED); // Todos os LEDs
-         pwm_set_enabled(slice_num_a, true); // Ativa o Buzzer A
-         pwm_set_enabled(slice_num_b, true); // Ativa o Buzzer B
+        //  pwm_set_enabled(slice_num_a, true); // Ativa o Buzzer A
+        //  pwm_set_enabled(slice_num_b, true); // Ativa o Buzzer B
      }
      ws2812b_render();
  }
@@ -338,9 +338,6 @@ bool send_gas_level(int gas_level) {
  
          // Liberar buffer
          pbuf_free(p);
-     } else {
-         // Se p for NULL, a conexão foi fechada
-         tcp_close(tpcb);
      }
      return ERR_OK;
  }
@@ -484,7 +481,7 @@ void main_loop() {
         send_gas_level(gas_level);
         
         // Pequeno atraso para evitar sobrecarga
-        sleep_ms(500);
+        sleep_ms(10000);
     }
 }
 
