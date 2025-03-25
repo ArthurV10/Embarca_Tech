@@ -159,41 +159,6 @@ void dht11_read(int *temperature, int *humidity) {
     pwm_set_gpio_level(BUZZER_B_PIN, 12500);
     pwm_set_enabled(slice_num_b, false);
 }
-
- // Função para configurar a cor dos LEDs com base no nível de gás e acionar os buzzers
- void set_leds_and_buzzers(uint16_t gas_level) {
-     if (gas_level <= LEVEL_LOW) {
-         // Verde nas duas primeiras fileiras e buzzers desligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 4, GRB_GREEN); // LEDs de 0 a 4
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else if (gas_level <= LEVEL_LOW_HIGH) {
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 9, GRB_GREEN); // LEDs de 0 a 9
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else if (gas_level <= LEVEL_MEDIUM_LOW) {
-         // Amarelo nas três primeiras fileiras e buzzers desligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 14, GRB_YELLOW); // LEDs de 0 a 14
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else if (gas_level <= LEVEL_MEDIUM) {
-         // Amarelo nas quatro primeiras fileiras e buzzers desligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 19, GRB_YELLOW); // LEDs de 0 a 19
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else {
-         // Vermelho em todas as fileiras e buzzers ligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill_all(GRB_RED); // Todos os LEDs
-        //  pwm_set_enabled(slice_num_a, true); // Ativa o Buzzer A
-        //  pwm_set_enabled(slice_num_b, true); // Ativa o Buzzer B
-     }
-     ws2812b_render();
- }
  
  // Função para desenhar uma onda no display
  void draw_wave(int amplitude, int frequency, int phase, int offset, int y) {
@@ -318,7 +283,7 @@ bool send_gas_level(int gas_level) {
 
     // Envia os dados para a API
     printf("Resposta da API: %s\n", state->response);
-
+    tcp_close(state->pcb);
     // Libere os recursos alocados
     free(state);
     return true;
@@ -446,6 +411,46 @@ void connect_wifi() {
     }
 }
 
+ // Função para configurar a cor dos LEDs com base no nível de gás e acionar os buzzers
+ void set_leds_and_buzzers(uint16_t gas_level) {
+    if (gas_level <= LEVEL_LOW) {
+        // Verde nas duas primeiras fileiras e buzzers desligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 4, GRB_GREEN); // LEDs de 0 a 4
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+    } else if (gas_level <= LEVEL_LOW_HIGH) {
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 9, GRB_GREEN); // LEDs de 0 a 9
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+    } else if (gas_level <= LEVEL_MEDIUM_LOW) {
+        // Amarelo nas três primeiras fileiras e buzzers desligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 14, GRB_YELLOW); // LEDs de 0 a 14
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+    } else if (gas_level <= LEVEL_MEDIUM) {
+        // Amarelo nas quatro primeiras fileiras e buzzers desligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 19, GRB_YELLOW); // LEDs de 0 a 19
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+        send_gas_level(gas_level);
+        sleep_ms(2000);
+
+    } else {
+        // Vermelho em todas as fileiras e buzzers ligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill_all(GRB_RED); // Todos os LEDs
+        //  pwm_set_enabled(slice_num_a, true); // Ativa o Buzzer A
+        //  pwm_set_enabled(slice_num_b, true); // Ativa o Buzzer B
+        send_gas_level(gas_level);
+        sleep_ms(2000);
+    }
+    ws2812b_render();
+}
+
 void main_loop() {
     int phase = 0;
 
@@ -478,10 +483,10 @@ void main_loop() {
 
         // Atualiza LEDs e buzzers
         set_leds_and_buzzers(gas_level);
-        send_gas_level(gas_level);
+        
         
         // Pequeno atraso para evitar sobrecarga
-        sleep_ms(10000);
+        sleep_ms(500);
     }
 }
 
