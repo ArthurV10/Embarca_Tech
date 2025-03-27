@@ -17,8 +17,8 @@
 
  #define WIFI_SSID "Cabecita"
  #define WIFI_PASSWORD "Claritazita1"
- #define API_HOST "metro.proxy.rlwy.net"
- #define API_PORT 39421
+ #define API_HOST "shinkansen.proxy.rlwy.net"
+ #define API_PORT 38884
  #define API_PATH "/notify_gas_level"
  
  // Definições para o display
@@ -279,13 +279,14 @@ bool send_gas_level(int gas_level) {
     }
 
     // Aguarde um tempo para garantir que a conexão seja estabelecida antes de enviar o POST
-    sleep_ms(2000);
+    sleep_ms(4000);
 
     // Envia os dados para a API
     printf("Resposta da API: %s\n", state->response);
-    tcp_close(state->pcb);
+    
     // Libere os recursos alocados
     free(state);
+    tcp_close(state->pcb);
     return true;
 }
 
