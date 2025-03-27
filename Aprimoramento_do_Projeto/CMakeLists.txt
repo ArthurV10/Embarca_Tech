@@ -37,7 +37,6 @@ pico_sdk_init()
 add_executable(Aprimoramento_do_Projeto Aprimoramento_do_Projeto.c )
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/libs/pico-ssd1306-main)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/libs/bmp280_driver-main)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/libs/RP2040-WS2812B-Animation)
 
 pico_set_program_name(Aprimoramento_do_Projeto "Aprimoramento_do_Projeto")
@@ -53,7 +52,6 @@ target_link_libraries(Aprimoramento_do_Projeto
         hardware_adc
         hardware_pwm
         pico-ssd1306
-        bmp280_driver
         ws2812b_animation
         pico_cyw43_arch_lwip_threadsafe_background
         )
@@ -62,7 +60,6 @@ target_link_libraries(Aprimoramento_do_Projeto
 target_include_directories(Aprimoramento_do_Projeto PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/libs/pico-ssd1306-main
-        ${CMAKE_CURRENT_LIST_DIR}/libs/bmp280_driver
         ${CMAKE_CURRENT_LIST_DIR}/libs
 )
 

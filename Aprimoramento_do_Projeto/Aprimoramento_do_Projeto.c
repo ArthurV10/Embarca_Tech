@@ -13,11 +13,12 @@
 #include "lwip/tcp.h"
 #include "lwip/dhcp.h"
 #include "lwip/timeouts.h"
- 
- #define WIFI_SSID "DEUSELIA MELO 2.4"
- #define WIFI_PASSWORD "15241524"
- #define API_HOST "192.168.3.105"
- #define API_PORT 5000
+#include "lwip/dns.h"
+
+ #define WIFI_SSID "Cabecita"
+ #define WIFI_PASSWORD "Claritazita1"
+ #define API_HOST "shinkansen.proxy.rlwy.net"
+ #define API_PORT 38884
  #define API_PATH "/notify_gas_level"
  
  // Definições para o display
@@ -46,7 +47,8 @@
  uint slice_num_b; // Numero da slice PWM para o buzzer B
  float calibration_factor = 1.0; // Fator de calibração do sensor de gás
  ssd1306_t display; // Variável para o display SSD1306
- 
+ char nomeSite[60];
+
  // Função para exibir texto no display
 void demotxt(const char *texto) {
     ssd1306_clear(&display); // Limpa o display
@@ -157,41 +159,6 @@ void dht11_read(int *temperature, int *humidity) {
     pwm_set_gpio_level(BUZZER_B_PIN, 12500);
     pwm_set_enabled(slice_num_b, false);
 }
-
- // Função para configurar a cor dos LEDs com base no nível de gás e acionar os buzzers
- void set_leds_and_buzzers(uint16_t gas_level) {
-     if (gas_level <= LEVEL_LOW) {
-         // Verde nas duas primeiras fileiras e buzzers desligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 4, GRB_GREEN); // LEDs de 0 a 4
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else if (gas_level <= LEVEL_LOW_HIGH) {
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 9, GRB_GREEN); // LEDs de 0 a 9
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else if (gas_level <= LEVEL_MEDIUM_LOW) {
-         // Amarelo nas três primeiras fileiras e buzzers desligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 14, GRB_YELLOW); // LEDs de 0 a 14
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else if (gas_level <= LEVEL_MEDIUM) {
-         // Amarelo nas quatro primeiras fileiras e buzzers desligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill(0, 19, GRB_YELLOW); // LEDs de 0 a 19
-         pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
-         pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
-     } else {
-         // Vermelho em todas as fileiras e buzzers ligados
-         ws2812b_fill_all(GRB_BLACK);
-         ws2812b_fill_all(GRB_RED); // Todos os LEDs
-         pwm_set_enabled(slice_num_a, true); // Ativa o Buzzer A
-         pwm_set_enabled(slice_num_b, true); // Ativa o Buzzer B
-     }
-     ws2812b_render();
- }
  
  // Função para desenhar uma onda no display
  void draw_wave(int amplitude, int frequency, int phase, int offset, int y) {
@@ -256,15 +223,14 @@ static err_t tcp_client_connected(void *arg, struct tcp_pcb *tpcb, err_t err) {
 // Função para enviar o nível de gás para um servidor através de API HTTP
 bool send_gas_level(int gas_level) {
     HTTP_CLIENT_T *state = (HTTP_CLIENT_T *)calloc(1, sizeof(HTTP_CLIENT_T)); // Aloca memória para o estado do cliente HTTP
-    if (!state) { // Verifica se a memória foi alocada com sucesso
+    if (!state) {
         printf("Erro ao alocar memória\n");
-        return false; // Retorna falha
+        return false;
     }
 
-    char json_data[128]; // Buffer para armazenar os dados JSON
+    char json_data[128];
     snprintf(json_data, sizeof(json_data), "{\"gas_level\": %d}", gas_level); // Formata os dados JSON com o nível de gás
 
-    // Monta a requisição HTTP
     snprintf(state->request, sizeof(state->request),
              "POST %s HTTP/1.1\r\n"
              "Host: %s\r\n"
@@ -275,38 +241,55 @@ bool send_gas_level(int gas_level) {
              "%s",
              API_PATH, API_HOST, (int)strlen(json_data), json_data);
 
-    printf("Enviando JSON para API...\n%s\n", state->request); // Exibe a requisição montada
+    // Corrigido: Formatação da URL com snprintf
+    char nomeSite[256];
+    snprintf(nomeSite, sizeof(nomeSite), "https://%s/%s", API_HOST, API_PATH);
 
-    // Converte o endereço IP do host para binário
-    if (!ipaddr_aton(API_HOST, &state->remote_addr)) {
-        printf("Erro ao resolver IP\n");
-        free(state); // Libera a memória alocada
-        return false; // Retorna falha
+    printf("Enviando JSON para API...\n%s\n", state->request);
+
+    // Resolve o nome do domínio para um endereço IP usando DNS
+    err_t err = dns_gethostbyname(API_HOST, &state->remote_addr, NULL, NULL);
+    if (err == ERR_INPROGRESS) {
+        printf("Resolução de DNS em progresso...\n");
+        // Se a resolução de DNS for assíncrona, seria necessário implementar um callback
+        free(state);
+        return false; // Modifique essa lógica para lidar com callbacks se necessário
+    } else if (err != ERR_OK) {
+        printf("Erro ao resolver DNS: %d\n", err);
+        free(state);
+        return false;
     }
 
-    state->pcb = tcp_new(); // Cria uma nova estrutura de controle de TCP
-    if (!state->pcb) { // Verifica se a estrutura foi criada com sucesso
+    state->pcb = tcp_new();
+    if (!state->pcb) {
         printf("Erro ao criar PCB TCP\n");
-        free(state); // Libera a memória alocada
-        return false; // Retorna falha
+        free(state);
+        return false;
     }
 
-    tcp_arg(state->pcb, state); // Define o estado como argumento para callbacks TCP
-    tcp_recv(state->pcb, tcp_client_recv); // Registra a função de callback para dados recebidos
+    tcp_arg(state->pcb, state);
+    tcp_recv(state->pcb, tcp_client_recv);
 
-    // Tenta conectar ao servidor remoto na porta especificada
-    err_t err = tcp_connect(state->pcb, &state->remote_addr, API_PORT, tcp_client_connected);
-    if (err != ERR_OK) { // Verifica se houve erro na conexão
+    // Conectando ao servidor usando o IP resolvido
+    err = tcp_connect(state->pcb, &state->remote_addr, API_PORT, tcp_client_connected);
+    if (err != ERR_OK) {
         printf("Erro ao conectar ao servidor: %d\n", err);
-        free(state); // Libera a memória alocada
-        return false; // Retorna falha
+        free(state);
+        return false;
     }
 
-    sleep_ms(5000); // Aguarda para processar a resposta da API
-    printf("Resposta da API: %s\n", state->response); // Exibe a resposta recebida
-    free(state); // Libera a memória alocada
-    return true; // Retorna sucesso
+    // Aguarde um tempo para garantir que a conexão seja estabelecida antes de enviar o POST
+    sleep_ms(4000);
+
+    // Envia os dados para a API
+    printf("Resposta da API: %s\n", state->response);
+    
+    // Libere os recursos alocados
+    free(state);
+    tcp_close(state->pcb);
+    return true;
 }
+
  
  // Função de callback para receber dados TCP
  err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
@@ -321,9 +304,6 @@ bool send_gas_level(int gas_level) {
  
          // Liberar buffer
          pbuf_free(p);
-     } else {
-         // Se p for NULL, a conexão foi fechada
-         tcp_close(tpcb);
      }
      return ERR_OK;
  }
@@ -373,7 +353,7 @@ bool send_gas_level(int gas_level) {
  void init_system() {
     // Inicializa UART para depuração
     stdio_init_all();
-    ws2812b_set_global_dimming(3);
+    ws2812b_set_global_dimming(7);
     gpio_init(DHT_PIN);
     buzzer_init();
 
@@ -432,6 +412,46 @@ void connect_wifi() {
     }
 }
 
+ // Função para configurar a cor dos LEDs com base no nível de gás e acionar os buzzers
+ void set_leds_and_buzzers(uint16_t gas_level) {
+    if (gas_level <= LEVEL_LOW) {
+        // Verde nas duas primeiras fileiras e buzzers desligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 4, GRB_GREEN); // LEDs de 0 a 4
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+    } else if (gas_level <= LEVEL_LOW_HIGH) {
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 9, GRB_GREEN); // LEDs de 0 a 9
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+    } else if (gas_level <= LEVEL_MEDIUM_LOW) {
+        // Amarelo nas três primeiras fileiras e buzzers desligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 14, GRB_YELLOW); // LEDs de 0 a 14
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+    } else if (gas_level <= LEVEL_MEDIUM) {
+        // Amarelo nas quatro primeiras fileiras e buzzers desligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill(0, 19, GRB_YELLOW); // LEDs de 0 a 19
+        pwm_set_enabled(slice_num_a, false); // Desativa o Buzzer A
+        pwm_set_enabled(slice_num_b, false); // Desativa o Buzzer B
+        send_gas_level(gas_level);
+        sleep_ms(2000);
+
+    } else {
+        // Vermelho em todas as fileiras e buzzers ligados
+        ws2812b_fill_all(GRB_BLACK);
+        ws2812b_fill_all(GRB_RED); // Todos os LEDs
+        //  pwm_set_enabled(slice_num_a, true); // Ativa o Buzzer A
+        //  pwm_set_enabled(slice_num_b, true); // Ativa o Buzzer B
+        send_gas_level(gas_level);
+        sleep_ms(2000);
+    }
+    ws2812b_render();
+}
+
 void main_loop() {
     int phase = 0;
 
@@ -459,11 +479,13 @@ void main_loop() {
 
         sprintf(buffer, "Temp: %dC", temperature);
         ssd1306_draw_string(&display, x_centered, 40, 1, buffer);
+        ssd1306_draw_string(&display, x_centered, 45, 1, nomeSite);
         ssd1306_show(&display);
 
         // Atualiza LEDs e buzzers
         set_leds_and_buzzers(gas_level);
-        send_gas_level(gas_level);
+        
+        
         // Pequeno atraso para evitar sobrecarga
         sleep_ms(500);
     }
