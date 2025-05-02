@@ -17,111 +17,147 @@
 #define BUTTON_A 5
 #define BUTTON_B 6
 
-// Função de callback para processar requisições HTTP
-static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
-{
-    if (!p)
-    {
+#define GAS_SENSOR 28
+
+char directionWindRose[20];
+
+void selectDirectionWindRose(uint16_t value_x, uint16_t value_y){
+    if(value_y > 3000 && value_x > 2000 && value_x < 3000) {
+        strcpy(directionWindRose, "Norte");
+    } else if(value_y < 1000 && value_x > 2000 && value_x < 3000) {
+        strcpy(directionWindRose, "Sul");
+    } else if(value_x > 3000 && value_y > 2000 && value_y < 3000) {
+        strcpy(directionWindRose, "Leste");
+    } else if(value_x < 1000 && value_y > 2000 && value_y < 3000) {
+        strcpy(directionWindRose, "Oeste");
+    } else if(value_x > 3000 && value_y > 3000) {
+        strcpy(directionWindRose, "Nordeste");
+    } else if(value_x < 1000 && value_y > 3000) {
+        strcpy(directionWindRose, "Noroeste");
+    } else if(value_x > 3000 && value_y < 1000) {
+        strcpy(directionWindRose, "Sudeste");
+    } else if(value_x < 1000 && value_y < 1000) {
+        strcpy(directionWindRose, "Sudoeste");
+    } else {
+        strcpy(directionWindRose, "Centro");
+    }
+}
+
+static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+    if (!p) {
         tcp_close(tpcb);
-        tcp_recv(tpcb, NULL);
         return ERR_OK;
     }
 
-    tcp_recved(tpcb,p->len);
+    // Copia o payload completo para uma string terminada em '\0'
+    char *request = malloc(p->tot_len + 1);
+    if (!request) {
+        pbuf_free(p);
+        return ERR_MEM;
+    }
+    memcpy(request, p->payload, p->tot_len);
+    request[p->tot_len] = '\0';
 
-    char *request = (char *)malloc(p->len + 1);
-    memcpy(request, p->payload, p->len);
-    request[p->len] = '\0';
+    // Informa ao stack LWIP que consumimos os bytes
+    tcp_recved(tpcb, p->tot_len);
+    pbuf_free(p);
 
-    printf("Request: %s\n", request);
-
-
-    //Leitura Botão A e B
-    uint8_t button_a = !gpio_get(BUTTON_A);
-    uint8_t button_b = !gpio_get(BUTTON_B);
-
-    // Leitura do joystick
+    // Lê sensores
+    uint8_t btn_a = !gpio_get(BUTTON_A);
+    uint8_t btn_b = !gpio_get(BUTTON_B);
     adc_select_input(1);
     uint16_t x_value = adc_read();
     adc_select_input(0);
     uint16_t y_value = adc_read();
+    adc_select_input(2);
+    uint16_t gas_value = adc_read();
+    selectDirectionWindRose(x_value,y_value);
 
-    // Resposta JSON se for /data
-    if (strstr(request, "GET /data") != NULL)
-    {
-        char json_body[128];
-        snprintf(json_body, sizeof(json_body), "{\"x\": %d, \"y\": %d, \"button_a\":%d, \"button_b\":%d}", 
-        x_value, y_value, button_a, button_b);
+    bool is_data = (strstr(request, "GET /data") != NULL);
 
-        char json[256];
-        snprintf(json, sizeof(json),
+    // Buffer de resposta único, em memória estática
+    static char response_buffer[4096];
+
+    //Função para pegar direção da rosa dos ventos
+
+    if (is_data) {
+        // monta JSON
+        char json_body[256];
+        int n = snprintf(json_body, sizeof(json_body),
+            "{\"x\":%d,\"y\":%d,\"btn_a\":%d,\"btn_b\":%d,\"gas\":%d,\"dir\":\"%s\"}",
+            x_value, y_value, btn_a, btn_b, gas_value, directionWindRose);
+
+        size_t json_len = strlen(json_body);
+        int header_len = snprintf(response_buffer, sizeof(response_buffer),
             "HTTP/1.1 200 OK\r\n"
-            "Connection: close\r\n" 
             "Content-Type: application/json\r\n"
-            "Cache-Control: no-cache\r\n"
-            "Content-Length: %d\r\n"
-            "\r\n"
-            "%s",
-            (int)strlen(json_body), json_body);
+            "Content-Length: %zu\r\n"
+            "Connection: close\r\n"
+            "\r\n",
+            json_len);
 
-        tcp_write(tpcb, json, strlen(json), TCP_WRITE_FLAG_COPY);
-        tcp_output(tpcb);
+            if (header_len + json_len >= sizeof(response_buffer)) {
+                free(request);
+                return ERR_BUF;
+            }
+    
+            memcpy(response_buffer + header_len, json_body, json_len);
+            response_buffer[header_len + json_len] = '\0';
+    } else {
+        // monta HTML
+        const char *html_body =
+            "<!DOCTYPE html><html><head>"
+            "<title>Monitor Pico W</title>"
+            "<style>body{font-family:Arial;margin:20px}.sensor-value{font-weight:bold;color:#2c3e50}</style>"
+            "<script>"
+            "function updateData(){"
+            "fetch('/data').then(r=>r.json()).then(data=>{"
+            "document.getElementById('x-val').textContent=data.x;"
+            "document.getElementById('y-val').textContent=data.y;"
+            "document.getElementById('btn-a').textContent=data.btn_a?'Pressionado':'Livre';"
+            "document.getElementById('btn-b').textContent=data.btn_b?'Pressionado':'Livre';"
+            ////Plaquinha não está aguentando enviar o HTML com mais um sensor, porém se apagar ou comentar uma das linhas
+            //dos sensores e descomentar essa comentada envia normalmente
+            // "document.getElementById('gas').textContent=data.gas;})}"
+            "document.getElementById('dir').textContent=data.dir;})}"
+            "setInterval(updateData,300);window.onload=updateData;"
+            "</script></head>"
+            "<body>"
+            "<h1>Monitor de Sensores</h1>"
+            "<p>Eixo X: <span id=\"x-val\" class=\"sensor-value\">-</span></p>"
+            "<p>Eixo Y: <span id=\"y-val\" class=\"sensor-value\">-</span></p>"
+            "<p>Botão A: <span id=\"btn-a\" class=\"sensor-value\">-</span></p>"
+            "<p>Botão B: <span id=\"btn-b\" class=\"sensor-value\">-</span></p>"
+            //Plaquinha não está aguentando enviar o HTML com mais um sensor, porém se apagar ou comentar uma das linhas
+            //dos sensores e descomentar essa comentada envia normalmente
+            // "<p>Gás: <span id=\"gas\" class=\"sensor-value\">-</span></p>"
+            "<p>Direção: <span id=\"dir\" class=\"sensor-value\">-</span></p>"
+            "</body></html>";
 
-        tcp_close(tpcb);                             
-        tcp_recv(tpcb, NULL);
+        size_t body_len = strlen(html_body);
+        int header_len = snprintf(response_buffer, sizeof(response_buffer),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/html; charset=utf-8\r\n"
+            "Content-Length: %zu\r\n"
+            "Connection: close\r\n"
+            "\r\n",
+            body_len);
 
-        free(request);
-        pbuf_free(p);
-        return ERR_OK;
+            if (header_len + body_len >= sizeof(response_buffer)) {
+                free(request);
+                return ERR_BUF;
+            }
+    
+            memcpy(response_buffer + header_len, html_body, body_len);
+            response_buffer[header_len + body_len] = '\0'; 
     }
 
-    // Página HTML principal
-    char html[2048];
-    snprintf(html, sizeof(html),
-            "HTTP/1.1 200 OK\r\n"
-            "Connection: close\r\n" 
-            "Content-Type: text/html\r\n"
-            "Cache-Control: no-cache\r\n"
-            "\r\n"
-            "<!DOCTYPE html>\n"
-            "<html>\n"
-                "<head>\n"
-                    "<title>Joystick E Botões</title>\n"
-                    "<style>\n"
-                        "body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }\n"
-                        "h1 { font-size: 48px; }\n"
-                        ".data { font-size: 36px; margin-top: 20px; }\n"
-                    "</style>\n"
-                    "<script>\n"
-                        "function updateData() {\n"
-                        "  fetch('/data').then(r => r.json()).then(data => {\n"
-                        "    document.getElementById('x').textContent = data.x;\n"
-                        "    document.getElementById('y').textContent = data.y;\n"
-                        "    document.getElementById('btnA').textContent = data.button_a ? 'Pressionado' : 'Livre';\n"
-                        "    document.getElementById('btnB').textContent = data.button_b ? 'Pressionado' : 'Livre';\n"
-                        "  });\n"
-                        "}\n"
-                        "setInterval(updateData, 200);\n"
-                        "window.onload = updateData;\n"
-                    "</script>\n"
-                "</head>\n"
-                "<body>\n"
-                    "<h1>Monitoramento Joystick & Botao</h1>\n"
-                    "<div class=\"data\">Valor X: <span id=\"x\">-</span></div>\n"
-                    "<div class=\"data\">Valor Y: <span id=\"y\">-</span></div>\n"
-                    "<div class=\"data\">Botao A: <span id=\"btnA\">-</span></div>\n"
-                    "<div class=\"data\">Botao B: <span id=\"btnB\">-</span></div>\n"
-                "</body>\n"
-            "</html>\n");
-
-    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);
+    // envia tudo de uma vez
+    size_t response_len = strlen(response_buffer);
+    tcp_write(tpcb, response_buffer, response_len, TCP_WRITE_FLAG_COPY);
     tcp_output(tpcb);
 
-    tcp_close(tpcb);
-    tcp_recv(tpcb, NULL);
-    
     free(request);
-    pbuf_free(p);
     return ERR_OK;
 }
 
@@ -174,6 +210,7 @@ int main()
     adc_init();
     adc_gpio_init(JOYSTICK_X); // X (ADC0)
     adc_gpio_init(JOYSTICK_Y); // Y (ADC1)
+    adc_gpio_init(GAS_SENSOR); // Y (ADC1)
     adc_set_temp_sensor_enabled(true);
 
     // Configura o servidor TCP
