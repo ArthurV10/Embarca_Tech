@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "lwip/tcp.h"
+#include "hardware/adc.h"
 #include "lwip/ip_addr.h"
 
 // Configurações de Rede
@@ -17,6 +19,13 @@
 #define LED_B_PIN 12
 #define LED_G_PIN 11
 
+// PINOS SENSORES
+#define BUTTON_A 5
+#define BUTTON_B 6 
+#define JOYSTICK_X 26
+#define JOYSTICK_Y 27
+#define GAS_SENSOR 28
+
 // Estrutura para controle de dados TCP
 struct tcp_data {
     struct tcp_pcb *pcb;
@@ -25,130 +34,155 @@ struct tcp_data {
     int total;
 };
 
-// Protótipos de funções
-static err_t tcp_connected_callback(void *arg, struct tcp_pcb *pcb, err_t err);
-static err_t tcp_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len);
-static void tcp_error_callback(void *arg, err_t err);
+static struct tcp_pcb *global_pcb = NULL;
+static ip_addr_t server_ip;
+static volatile bool need_reconnect = false;
 
-// Função para enviar dados ao servidor
-static void send_data_to_server() {
-    // Simulação de dados dos sensores
-    int x = rand() % 1024;
-    int y = rand() % 1024;
-    int btn_a = rand() % 2;
-    int btn_b = rand() % 2;
-    int gas = rand() % 4096;
-    const char *dir = (rand() % 2) ? "norte" : "sul";
+// Protótipos novos
+static err_t tcp_recv_callback(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err);
+static void init_tcp_connection(void);
+static void send_json_over_tcp(const char *data, size_t len);
 
-    // Cria o payload JSON
-    char json_data[256];
-    int json_len = snprintf(json_data, sizeof(json_data),
-        "{\"x\":%d,\"y\":%d,\"btn_a\":%d,\"btn_b\":%d,\"gas\":%d,\"dir\":\"%s\"}",
-        x, y, btn_a, btn_b, gas, dir);
+// Variaveis Globais
+uint16_t x;
+uint16_t y;
+uint8_t btn_a;
+uint8_t btn_b;
+uint16_t gas;
+char dir[10];
 
-    // Cria a requisição HTTP POST
-    char http_request[512];
-    int req_len = snprintf(http_request, sizeof(http_request),
-        "POST /update HTTP/1.1\r\n"
-        "Host: %s:%d\r\n"
-        "Content-Type: application/json\r\n"
-        "Content-Length: %d\r\n\r\n"
-        "%s",
-        SERVER_IP, SERVER_PORT, json_len, json_data);
+static char json_data[256];
+static char http_request[512];
 
-    if (req_len >= sizeof(http_request)) {
-        printf("Requisição HTTP muito longa!\n");
+static volatile bool tcp_ready = false;
+static err_t tcp_connected_callback(void *arg, struct tcp_pcb *pcb, err_t err) {
+    if (err == ERR_OK){
+        printf("TCP conectado!\n");
+        tcp_ready = true;
+    } 
+    return err;
+}
+
+static err_t tcp_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len) {
+    // apenas confere ack, não fecha pcb
+    return ERR_OK;
+}
+static void tcp_error_callback(void *arg, err_t err) {
+    printf("Erro TCP: %d\n", err);
+    global_pcb = NULL;
+    tcp_ready = false;
+    need_reconnect = true;
+}
+
+// Funções de Conexão
+err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+    if (p == NULL) {
+        // O servidor fechou a conexão
+        printf("Servidor encerrou TCP, reabrindo...\n");
+        tcp_close(tpcb);
+        global_pcb = NULL;
+        tcp_ready = false;
+        need_reconnect = true;
+        return ERR_OK;
+    }
+    
+    if (p != NULL) {
+        // Copiar os dados para um buffer legível
+        char buffer[256];
+        memset(buffer, 0, sizeof(buffer));
+        strncpy(buffer, (char*)p->payload, p->len);
+        buffer[p->len] = '\0'; // Garantir terminação nula
+
+        printf("Recebido: %s\n", buffer);
+
+        // Liberar buffer
+        pbuf_free(p);
+    }
+    return ERR_OK;
+}
+
+void init_tcp_connection() {
+    global_pcb = tcp_new();
+    if (!global_pcb) {
+        printf("Falha ao criar PCB persistente\n");
         return;
     }
 
-    // Configura o PCB TCP
-    struct tcp_pcb *pcb = tcp_new();
-    if (!pcb) {
-        printf("Falha ao criar PCB\n");
-        return;
-    }
-
-    // Converte o IP para formato adequado
-    ip_addr_t server_ip;
+    // Converte IP apenas uma vez
     if (!ipaddr_aton(SERVER_IP, &server_ip)) {
         printf("IP inválido\n");
-        tcp_close(pcb);
         return;
     }
 
-    // Aloca memória para os dados
-    struct tcp_data *state = (struct tcp_data *)malloc(sizeof(struct tcp_data) + req_len);
-    if (!state) {
-        printf("Falha ao alocar memória\n");
-        tcp_close(pcb);
+    tcp_err(global_pcb, tcp_error_callback);
+    tcp_recv(global_pcb, tcp_recv_callback);
+    tcp_sent(global_pcb, tcp_sent_callback);
+
+    err_t err = tcp_connect(global_pcb, &server_ip, SERVER_PORT, tcp_connected_callback);
+    if (err != ERR_OK) {
+        printf("Erro ao conectar PCB: %d\n", err);
+    }
+}
+
+static void send_json_over_tcp(const char *payload, size_t len) {
+    if (!global_pcb || global_pcb->state != ESTABLISHED) {
+        printf("Conexão TCP não está estabelecida\n");
         return;
     }
-    state->pcb = pcb;
-    state->sent = 0;
-    state->total = req_len;
-    state->data = (char *)(state + 1);
-    memcpy(state->data, http_request, req_len);
-
-    // Configura callbacks
-    tcp_arg(pcb, state);
-    tcp_err(pcb, tcp_error_callback);
-    tcp_connect(pcb, &server_ip, SERVER_PORT, tcp_connected_callback);
-}
-
-// Callback de conexão estabelecida
-static err_t tcp_connected_callback(void *arg, struct tcp_pcb *pcb, err_t err) {
-    struct tcp_data *state = (struct tcp_data *)arg;
-
+    err_t err = tcp_write(global_pcb, payload, len, TCP_WRITE_FLAG_COPY);
     if (err != ERR_OK) {
-        free(state);
-        return err;
+        printf("tcp_write falhou: %d\n", err);
+        return;
     }
-
-    tcp_sent(pcb, tcp_sent_callback);
-    size_t len = state->total - state->sent;
-    err = tcp_write(pcb, state->data + state->sent, len, TCP_WRITE_FLAG_COPY);
-    if (err != ERR_OK) {
-        free(state);
-        tcp_close(pcb);
-        return err;
-    }
-    state->sent += len;
-    tcp_output(pcb);
-
-    return ERR_OK;
+    tcp_output(global_pcb);
 }
 
-// Callback de dados enviados
-static err_t tcp_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len) {
-    struct tcp_data *state = (struct tcp_data *)arg;
-    state->sent += len;
+// Funções de leitura sensor
+void read_button(){
+    btn_a = !gpio_get(BUTTON_A);
+    btn_b = !gpio_get(BUTTON_B);
+}
 
-    if (state->sent < state->total) {
-        size_t remaining = state->total - state->sent;
-        err_t err = tcp_write(pcb, state->data + state->sent, remaining, TCP_WRITE_FLAG_COPY);
-        if (err != ERR_OK) {
-            free(state);
-            tcp_close(pcb);
-            return err;
-        }
-        tcp_output(pcb);
-    } else {
-        free(state);
-        tcp_close(pcb);
+void read_joystick(){
+    adc_select_input(1);
+    x = adc_read();
+    adc_select_input(0);
+    y = adc_read();
+}
+
+void read_gas(){
+    adc_select_input(2);
+    gas = adc_read();
+}
+
+void selectDirectionWindRose(uint16_t value_x, uint16_t value_y) {
+    // Center and deadzone
+    float dx = (float)value_x - 2048.0f;
+    float dy = (float)value_y - 2048.0f;
+    const float deadzone = 300.0f;
+    if (fabsf(dx) < deadzone && fabsf(dy) < deadzone) {
+        strcpy(dir, "Centro");
+        return;
     }
-    return ERR_OK;
+
+    // Compute angle [0, 2π)
+    float ang = atan2f(dy, dx);
+    if (ang < 0) ang += 2.0f * M_PI;
+
+    // Wind rose labels
+    static const char *labels[8] = {
+        "Leste", "Nordeste", "Norte", "Noroeste",
+        "Oeste", "Sudoeste", "Sul",   "Sudeste"
+    };
+
+    // Determine sector (45° each), offset by 22.5°
+    int idx = (int)floorf((ang + M_PI/8) / (M_PI/4)) % 8;
+    strcpy(dir, labels[idx]);
 }
 
-// Callback de erro
-static void tcp_error_callback(void *arg, err_t err) {
-    struct tcp_data *state = (struct tcp_data *)arg;
-    printf("Erro TCP: %d\n", err);
-    free(state);
-}
 
-int main() {
+void setup(){
     stdio_init_all();
-    
     // Inicializar LED RGB
     gpio_init(LED_R_PIN);
     gpio_init(LED_G_PIN);
@@ -157,6 +191,27 @@ int main() {
     gpio_set_dir(LED_G_PIN, GPIO_OUT);
     gpio_set_dir(LED_B_PIN, GPIO_OUT);
 
+    // Inicialização Botão A
+    gpio_init(BUTTON_A);
+    gpio_pull_up(BUTTON_A);
+    gpio_set_dir(BUTTON_A, GPIO_IN);
+
+    // Inicialização Botão B
+    gpio_init(BUTTON_B);
+    gpio_pull_up(BUTTON_B);
+    gpio_set_dir(BUTTON_B, GPIO_IN);
+
+    // Inicializar Joystick
+    adc_init();
+
+    adc_gpio_init(JOYSTICK_X);
+    adc_gpio_init(JOYSTICK_Y);
+
+    // Inicializar Sensor de Gás
+    adc_gpio_init(GAS_SENSOR);
+}
+
+void wifi_init(){
     printf("Iniciando WiFi...\n");
     cyw43_arch_init();
     cyw43_arch_enable_sta_mode();
@@ -186,11 +241,60 @@ int main() {
         while(1) tight_loop_contents();
     }
 
+    init_tcp_connection();
+}
+
+int main() {
+    
+    setup();
+    wifi_init();
+    while (!tcp_ready){
+        cyw43_arch_poll();
+        sleep_ms(100);
+    } 
+    
     while (1) {
-        send_data_to_server();
-        sleep_ms(5000); // Envia a cada 5 segundos
+
+        if (need_reconnect) {
+            need_reconnect = false;
+            tcp_ready = false;              // limpa o flag
+            if (global_pcb) {
+                tcp_close(global_pcb);      // garante fechamento
+                global_pcb = NULL;
+            }
+            init_tcp_connection();
+            // aguarda conclusão do handshake
+            while (!tcp_ready) {
+                cyw43_arch_poll();
+                sleep_ms(10);
+            }
+        }
+
+        read_button();
+        read_joystick();
+        read_gas();
+        selectDirectionWindRose(x, y);
+
+        int json_len = snprintf(json_data, sizeof(json_data),
+            "{\"x\":%u,\"y\":%u,\"btn_a\":%u,\"btn_b\":%u,\"gas\":%u,\"dir\":\"%s\"}"
+            ,x, y, btn_a, btn_b, gas, dir);
+
+        int req_len = snprintf(http_request, sizeof(http_request),
+            "POST /update HTTP/1.1\r\n"
+            "Host: %s:%d\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %d\r\n\r\n"
+            "%s",
+            SERVER_IP, SERVER_PORT, json_len, json_data);
+
+            if (tcp_ready) {
+                send_json_over_tcp(http_request, req_len);
+            }
+        cyw43_arch_poll();
+        sleep_ms(500);
     }
 
+    if (global_pcb) tcp_close(global_pcb);
     cyw43_arch_deinit();
     return 0;
 }

@@ -4,15 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor de Sensores</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .sensor-box { background: #f0f0f0; padding: 20px; border-radius: 10px; }
-        .sensor-item { margin: 10px 0; }
-        .valor { color: #2c3e50; font-weight: bold; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Monitor de Sensores IoT</h1>
+    <h1 id="titulo">Monitor de Sensores IoT</h1>
     <div class="sensor-box">
         <div class="sensor-item">
             Eixo X: <span class="valor" id="x">--</span>
@@ -42,8 +37,8 @@
                 
                 document.getElementById('x').textContent = data.x;
                 document.getElementById('y').textContent = data.y;
-                document.getElementById('btn_a').textContent = data.btn_a ? 'Pressionado' : 'Solt';
-                document.getElementById('btn_b').textContent = data.btn_b ? 'Pressionado' : 'Solt';
+                document.getElementById('btn_a').textContent = data.btn_a ? 'Pressionado' : 'Livre';
+                document.getElementById('btn_b').textContent = data.btn_b ? 'Pressionado' : 'Livre';
                 document.getElementById('gas').textContent = data.gas;
                 document.getElementById('dir').textContent = data.dir;
                 

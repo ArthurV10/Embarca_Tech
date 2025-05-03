@@ -79,5 +79,12 @@ target_sources(Codigo_Desafio_Extra PRIVATE
     ${PICO_SDK_PATH}/lib/lwip/src/apps/http/fs.c
 )
 
+target_compile_definitions(Codigo_Desafio_Extra PRIVATE
+    PBUF_POOL_SIZE=64
+    MEM_SIZE=16000
+    TCP_SND_BUF=8192
+    TCP_WND=8192
+)
+
 # Gera UF2, map, etc.
 pico_add_extra_outputs(Codigo_Desafio_Extra)

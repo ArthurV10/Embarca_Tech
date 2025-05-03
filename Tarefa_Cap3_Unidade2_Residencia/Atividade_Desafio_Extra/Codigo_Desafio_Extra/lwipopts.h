@@ -34,6 +34,9 @@
 #define MEMP_NUM_TCP_SEG 16
 #define TCP_WND 2048
 #define TCP_SND_BUF 2048
+#define MEMP_NUM_TCP_PCB       12    // número de PCBs ativas simultâneas
+#define TCP_MSL                5000  // tempo em ms antes de liberar FIN-WAIT/ TIME-WAIT
+#define TCP_QUEUE_OOSEQ        0 
 #define LWIP_TIMEVAL_PRIVATE 0
 
 
