@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Sensores</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .sensor-box { background: #f0f0f0; padding: 20px; border-radius: 10px; }
+        .sensor-item { margin: 10px 0; }
+        .valor { color: #2c3e50; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Monitor de Sensores IoT</h1>
+    <div class="sensor-box">
+        <div class="sensor-item">
+            Eixo X: <span class="valor" id="x">--</span>
+        </div>
+        <div class="sensor-item">
+            Eixo Y: <span class="valor" id="y">--</span>
+        </div>
+        <div class="sensor-item">
+            Botão A: <span class="valor" id="btn_a">--</span>
+        </div>
+        <div class="sensor-item">
+            Botão B: <span class="valor" id="btn_b">--</span>
+        </div>
+        <div class="sensor-item">
+            Sensor de Gás: <span class="valor" id="gas">--</span> ppm
+        </div>
+        <div class="sensor-item">
+            Direção: <span class="valor" id="dir">--</span>
+        </div>
+    </div>
+
+    <script>
+        async function atualizarDados() {
+            try {
+                const response = await fetch('/data');
+                const data = await response.json();
+                
+                document.getElementById('x').textContent = data.x;
+                document.getElementById('y').textContent = data.y;
+                document.getElementById('btn_a').textContent = data.btn_a ? 'Pressionado' : 'Solt';
+                document.getElementById('btn_b').textContent = data.btn_b ? 'Pressionado' : 'Solt';
+                document.getElementById('gas').textContent = data.gas;
+                document.getElementById('dir').textContent = data.dir;
+                
+            } catch (error) {
+                console.error('Erro:', error);
+            }
+        }
+
+        setInterval(atualizarDados, 1000); // Atualiza a cada 1 segundo
+        atualizarDados(); // Primeira atualização
+    </script>
+</body>
+</html>

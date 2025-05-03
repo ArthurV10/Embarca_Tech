@@ -83,6 +83,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
     if (is_data) {
         // monta JSON
         char json_body[256];
+        //No endpoint '/data' é possivel vizualizar que todos os dados são enviados para a página
         int n = snprintf(json_body, sizeof(json_body),
             "{\"x\":%d,\"y\":%d,\"btn_a\":%d,\"btn_b\":%d,\"gas\":%d,\"dir\":\"%s\"}",
             x_value, y_value, btn_a, btn_b, gas_value, directionWindRose);
@@ -120,7 +121,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
             //dos sensores e descomentar essa comentada envia normalmente
             // "document.getElementById('gas').textContent=data.gas;})}"
             "document.getElementById('dir').textContent=data.dir;})}"
-            "setInterval(updateData,300);window.onload=updateData;"
+            "setInterval(updateData,1000);window.onload=updateData;"
             "</script></head>"
             "<body>"
             "<h1>Monitor de Sensores</h1>"
