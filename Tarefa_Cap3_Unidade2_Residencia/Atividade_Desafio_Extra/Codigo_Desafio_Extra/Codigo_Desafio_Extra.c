@@ -7,12 +7,14 @@
 #include "lwip/tcp.h"
 #include "hardware/adc.h"
 #include "lwip/ip_addr.h"
+#include "lwip/dns.h"
 
 // Configurações de Rede
 #define WIFI_SSID "DEUSELIA MELO 2.4"
 #define WIFI_PASSWORD "15241524"
 #define SERVER_IP "192.168.3.148"
-#define SERVER_PORT 8050
+#define SERVER_HOSTNAME "trolley.proxy.rlwy.net"
+#define SERVER_PORT 37216
 
 // LED RGB
 #define LED_R_PIN 13
@@ -101,26 +103,37 @@ err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t e
     return ERR_OK;
 }
 
-void init_tcp_connection() {
+static void lwip_dns_found_cb(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
+    if (ipaddr == NULL) {
+        printf("DNS lookup falhou para %s\n", name);
+        need_reconnect = true;
+        return;
+    }
+
+    // Copia o IP resolvido para a variável global
+    server_ip = *ipaddr;
+    printf("DNS: %s -> %s\n", name, ipaddr_ntoa(ipaddr));
+
+    // Agora podemos criar o PCB e conectar
     global_pcb = tcp_new();
-    if (!global_pcb) {
-        printf("Falha ao criar PCB persistente\n");
-        return;
-    }
-
-    // Converte IP apenas uma vez
-    if (!ipaddr_aton(SERVER_IP, &server_ip)) {
-        printf("IP inválido\n");
-        return;
-    }
-
     tcp_err(global_pcb, tcp_error_callback);
     tcp_recv(global_pcb, tcp_recv_callback);
     tcp_sent(global_pcb, tcp_sent_callback);
+    tcp_connect(global_pcb, &server_ip, SERVER_PORT, tcp_connected_callback);
+}
 
-    err_t err = tcp_connect(global_pcb, &server_ip, SERVER_PORT, tcp_connected_callback);
-    if (err != ERR_OK) {
-        printf("Erro ao conectar PCB: %d\n", err);
+void init_tcp_connection() {
+    // Inicia requisição DNS
+    err_t err = dns_gethostbyname(SERVER_HOSTNAME, &server_ip, lwip_dns_found_cb, NULL);
+    if (err == ERR_OK) {
+        // O nome já estava em cache: o callback não será chamado, fazemos a conexão direto:
+        lwip_dns_found_cb(SERVER_HOSTNAME, &server_ip, NULL);
+    } else if (err == ERR_INPROGRESS) {
+        // A pesquisa DNS está em andamento; quando terminar, dns_found_callback será chamada
+        printf("DNS lookup em andamento para %s...\n", SERVER_HOSTNAME);
+    } else {
+        printf("Erro ao iniciar DNS lookup: %d\n", err);
+        need_reconnect = true;
     }
 }
 
