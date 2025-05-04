@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request, send_from_directory
+import os
 
-app = Flask(__name__, static_folder='front-end', static_url_path='')
+app = Flask(__name__)
 
 dados_atuais = {
     'x': 0,
@@ -16,7 +17,6 @@ def update_data():
     global dados_atuais
     try:
         payload = request.get_json(force=True)
-        # Validação básica
         required_fields = ['x', 'y', 'btn_a', 'btn_b', 'gas', 'dir']
         if all(field in payload for field in required_fields):
             dados_atuais = payload
@@ -29,13 +29,25 @@ def update_data():
 def get_data():
     return jsonify(dados_atuais)
 
+# Página principal
 @app.route('/')
 def index():
-    return send_from_directory('../front-end', 'index.html')
+    return send_from_directory('front-end', 'index.html')
 
+# Arquivos estáticos (CSS, JS, imagens etc.)
 @app.route('/<path:path>')
 def serve_static(path):
-    return send_from_directory('../front-end', path)
+    return send_from_directory('front-end', path)
+
+# Rota de debug para verificar conteúdo da pasta
+@app.route('/debug-files')
+def debug_files():
+    caminho = os.path.join(os.getcwd(), 'front-end')
+    try:
+        arquivos = os.listdir(caminho)
+        return jsonify({'arquivos': arquivos})
+    except Exception as e:
+        return jsonify({'erro': str(e)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8050, debug=True)
