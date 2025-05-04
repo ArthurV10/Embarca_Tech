@@ -1,6 +1,6 @@
 from flask import Flask, jsonify, request, send_from_directory
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../front-end')
 
 dados_atuais = {
     'x': 0,
