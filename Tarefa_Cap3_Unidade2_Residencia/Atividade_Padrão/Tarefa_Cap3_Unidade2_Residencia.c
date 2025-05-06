@@ -6,10 +6,11 @@
 #include <stdlib.h>
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
+#include <math.h>
 #include "lwip/netif.h"
 
-#define WIFI_SSID "DEUSELIA MELO 2.4"
-#define WIFI_PASSWORD "15241524"
+#define WIFI_SSID "NOME DA REDE"
+#define WIFI_PASSWORD "SENHA DA REDE"
 
 #define JOYSTICK_X 26
 #define JOYSTICK_Y 27
@@ -21,26 +22,29 @@
 
 char directionWindRose[20];
 
-void selectDirectionWindRose(uint16_t value_x, uint16_t value_y){
-    if(value_y > 3000 && value_x > 2000 && value_x < 3000) {
-        strcpy(directionWindRose, "Norte");
-    } else if(value_y < 1000 && value_x > 2000 && value_x < 3000) {
-        strcpy(directionWindRose, "Sul");
-    } else if(value_x > 3000 && value_y > 2000 && value_y < 3000) {
-        strcpy(directionWindRose, "Leste");
-    } else if(value_x < 1000 && value_y > 2000 && value_y < 3000) {
-        strcpy(directionWindRose, "Oeste");
-    } else if(value_x > 3000 && value_y > 3000) {
-        strcpy(directionWindRose, "Nordeste");
-    } else if(value_x < 1000 && value_y > 3000) {
-        strcpy(directionWindRose, "Noroeste");
-    } else if(value_x > 3000 && value_y < 1000) {
-        strcpy(directionWindRose, "Sudeste");
-    } else if(value_x < 1000 && value_y < 1000) {
-        strcpy(directionWindRose, "Sudoeste");
-    } else {
+void selectDirectionWindRose(uint16_t value_x, uint16_t value_y) {
+    // Center and deadzone
+    float dx = (float)value_x - 2048.0f;
+    float dy = (float)value_y - 2048.0f;
+    const float deadzone = 300.0f;
+    if (fabsf(dx) < deadzone && fabsf(dy) < deadzone) {
         strcpy(directionWindRose, "Centro");
+        return;
     }
+
+    // Compute angle [0, 2π)
+    float ang = atan2f(dy, dx);
+    if (ang < 0) ang += 2.0f * M_PI;
+
+    // Wind rose labels
+    static const char *labels[8] = {
+        "Leste", "Nordeste", "Norte", "Noroeste",
+        "Oeste", "Sudoeste", "Sul",   "Sudeste"
+    };
+
+    // Determine sector (45° each), offset by 22.5°
+    int idx = (int)floorf((ang + M_PI/8) / (M_PI/4)) % 8;
+    strcpy(directionWindRose, labels[idx]);
 }
 
 static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
@@ -109,7 +113,6 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         const char *html_body =
             "<!DOCTYPE html><html><head>"
             "<title>Monitor Pico W</title>"
-            "<style>body{font-family:Arial;margin:20px}.sensor-value{font-weight:bold;color:#2c3e50}</style>"
             "<script>"
             "function updateData(){"
             "fetch('/data').then(r=>r.json()).then(data=>{"
@@ -117,21 +120,16 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
             "document.getElementById('y-val').textContent=data.y;"
             "document.getElementById('btn-a').textContent=data.btn_a?'Pressionado':'Livre';"
             "document.getElementById('btn-b').textContent=data.btn_b?'Pressionado':'Livre';"
-            ////Plaquinha não está aguentando enviar o HTML com mais um sensor, porém se apagar ou comentar uma das linhas
-            //dos sensores e descomentar essa comentada envia normalmente
-            // "document.getElementById('gas').textContent=data.gas;})}"
+            "document.getElementById('gas').textContent=data.gas;"
             "document.getElementById('dir').textContent=data.dir;})}"
             "setInterval(updateData,1000);window.onload=updateData;"
             "</script></head>"
             "<body>"
-            "<h1>Monitor de Sensores</h1>"
             "<p>Eixo X: <span id=\"x-val\" class=\"sensor-value\">-</span></p>"
             "<p>Eixo Y: <span id=\"y-val\" class=\"sensor-value\">-</span></p>"
             "<p>Botão A: <span id=\"btn-a\" class=\"sensor-value\">-</span></p>"
             "<p>Botão B: <span id=\"btn-b\" class=\"sensor-value\">-</span></p>"
-            //Plaquinha não está aguentando enviar o HTML com mais um sensor, porém se apagar ou comentar uma das linhas
-            //dos sensores e descomentar essa comentada envia normalmente
-            // "<p>Gás: <span id=\"gas\" class=\"sensor-value\">-</span></p>"
+            "<p>Gás: <span id=\"gas\" class=\"sensor-value\">-</span></p>"
             "<p>Direção: <span id=\"dir\" class=\"sensor-value\">-</span></p>"
             "</body></html>";
 

@@ -8,48 +8,82 @@
     <link rel="icon" href="https://embarcatech.ifpi.edu.br/static/img/logo-embarcatech.png" type="image/png">
 </head>
 <body>
-    <h1 id="titulo">Monitor de Sensores IoT</h1>
-    <div class="sensor-box">
-        <div class="sensor-item">
-            Eixo X: <span class="valor" id="x">--</span>
-        </div>
-        <div class="sensor-item">
-            Eixo Y: <span class="valor" id="y">--</span>
-        </div>
-        <div class="sensor-item">
-            Botão A: <span class="valor" id="btn_a">--</span>
-        </div>
-        <div class="sensor-item">
-            Botão B: <span class="valor" id="btn_b">--</span>
-        </div>
-        <div class="sensor-item">
-            Sensor de Gás: <span class="valor" id="gas">--</span> ppm
-        </div>
-        <div class="sensor-item">
-            Direção: <span class="valor" id="dir">--</span>
-        </div>
+    <div class="container">
+        <header>
+            <div class="title-container">
+                <h1 id="titulo">MONITOR DE SENSORES IoT</h1>
+            </div>
+        </header>
+        
+        <main class="content">
+            <section class="sensor-section">
+                <div class="sensor-box">
+                    <div class="sensor-box-header">
+                        <h2 class="sensor-box-title">LEITURAS</h2>
+                    </div>
+                    <div class="sensor-box-content">
+                        <div class="sensor-item">
+                            <span class="sensor-label">Eixo X:</span>
+                            <span class="valor" id="x">--</span>
+                        </div>
+                        <div class="sensor-item">
+                            <span class="sensor-label">Eixo Y:</span>
+                            <span class="valor" id="y">--</span>
+                        </div>
+                        <div class="sensor-item">
+                            <span class="sensor-label">Botão A:</span>
+                            <span class="valor" id="btn_a">--</span>
+                        </div>
+                        <div class="sensor-item">
+                            <span class="sensor-label">Botão B:</span>
+                            <span class="valor" id="btn_b">--</span>
+                        </div>
+                        <div class="sensor-item">
+                            <span class="sensor-label">Sensor de Gás:</span>
+                            <span class="valor" id="gas">--</span> <span class="unit">PPM</span>
+                        </div>
+                        <div class="sensor-item">
+                            <span class="sensor-label">Direção:</span>
+                            <span class="valor" id="dir">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="compass-section">
+                <div class="compass-box">
+                    <div class="compass-box-header">
+                        <h2 class="compass-box-title">BÚSSOLA</h2>
+                    </div>
+                    <div class="compass-box-content">
+                        <div class="compass-container">
+                            <!-- Compass background with segments -->
+                            <div class="compass-segments"></div>
+                            
+                            <!-- Direction labels -->
+                            <div class="compass-direction n">N</div>
+                            <div class="compass-direction ne">NE</div>
+                            <div class="compass-direction e">L</div>
+                            <div class="compass-direction se">SE</div>
+                            <div class="compass-direction s">S</div>
+                            <div class="compass-direction sw">SO</div>
+                            <div class="compass-direction w">O</div>
+                            <div class="compass-direction nw">NO</div>
+                            
+                            <!-- Center point and arrow -->
+                            <div class="compass-center"></div>
+                            <div class="compass-arrow" id="arrow"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="pixel-footer">
+            <p>EMBARCATECH IoT MONITOR v1.0</p>
+        </footer>
     </div>
 
-    <script>
-        async function atualizarDados() {
-            try {
-                const response = await fetch('/data');
-                const data = await response.json();
-                
-                document.getElementById('x').textContent = data.x;
-                document.getElementById('y').textContent = data.y;
-                document.getElementById('btn_a').textContent = data.btn_a ? 'Pressionado' : 'Livre';
-                document.getElementById('btn_b').textContent = data.btn_b ? 'Pressionado' : 'Livre';
-                document.getElementById('gas').textContent = data.gas;
-                document.getElementById('dir').textContent = data.dir;
-                
-            } catch (error) {
-                console.error('Erro:', error);
-            }
-        }
-
-        setInterval(atualizarDados, 1000); // Atualiza a cada 1 segundo
-        atualizarDados(); // Primeira atualização
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>

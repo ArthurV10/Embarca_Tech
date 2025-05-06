@@ -10,8 +10,8 @@
 #include "lwip/dns.h"
 
 // Configurações de Rede
-#define WIFI_SSID "DEUSELIA MELO 2.4"
-#define WIFI_PASSWORD "15241524"
+#define WIFI_SSID "Cabecita"
+#define WIFI_PASSWORD "Claritazita1"
 #define SERVER_IP "192.168.3.148"
 #define SERVER_HOSTNAME "trolley.proxy.rlwy.net"
 #define SERVER_PORT 37216
