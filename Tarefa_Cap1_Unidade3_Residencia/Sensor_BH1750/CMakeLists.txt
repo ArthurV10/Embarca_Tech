@@ -1,5 +1,3 @@
-# Generated Cmake Pico project file
-
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
@@ -25,17 +23,17 @@ endif()
 # ====================================================================================
 set(PICO_BOARD pico_w CACHE STRING "Board type")
 
-# Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
 project(Sensor_BH1750 C CXX ASM)
 
-# Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
+file(GLOB_RECURSE PROJECT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+)
 
-add_executable(Sensor_BH1750 Sensor_BH1750.c )
+add_executable(Sensor_BH1750 ${PROJECT_SOURCES})
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/libs/pico-ssd1306-main)
 
 pico_set_program_name(Sensor_BH1750 "Sensor_BH1750")
@@ -45,23 +43,21 @@ pico_set_program_version(Sensor_BH1750 "0.1")
 pico_enable_stdio_uart(Sensor_BH1750 0)
 pico_enable_stdio_usb(Sensor_BH1750 1)
 
-# Add the standard library to the build
 target_link_libraries(Sensor_BH1750
-        pico_stdlib
-        hardware_i2c
-        pico-ssd1306
+    pico_stdlib
+    hardware_i2c
+    hardware_pwm
+    pico-ssd1306 
 )
 
-# Add the standard include files to the build
 target_include_directories(Sensor_BH1750 PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
-        ${CMAKE_CURRENT_LIST_DIR}/libs/pico-ssd1306-main
+    ${CMAKE_CURRENT_SOURCE_DIR}/inc          # Adiciona o diretório 'inc' para os seus cabeçalhos
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/pico-ssd1306-main # Caminho para os cabeçalhos do ssd1306
 )
 
-# Add any user requested libraries
-target_link_libraries(Sensor_BH1750 
-        
-        )
+target_link_libraries(Sensor_BH1750
+)
 
 pico_add_extra_outputs(Sensor_BH1750)
 
+# --- MODIFICAÇÕES NECESSÁRIAS TERMINAM AQUI ---
